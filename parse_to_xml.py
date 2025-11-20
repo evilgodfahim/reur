@@ -25,12 +25,8 @@ for a in soup.select("a[href*='/opinion/article/']"):
     # Title extraction
     h1 = a.select_one("h1")
     h3 = a.select_one("h3")
-    title = None
-    if h1:
-        title = h1.get_text(strip=True)
-    elif h3:
-        title = h3.get_text(strip=True)
-    else:
+    title = h1.get_text(strip=True) if h1 else h3.get_text(strip=True) if h3 else None
+    if not title:
         continue
 
     # Description
@@ -38,16 +34,12 @@ for a in soup.select("a[href*='/opinion/article/']"):
     desc = desc_tag.get_text(strip=True) if desc_tag else ""
 
     # Publish time
-    pub = ""
-    t = a.select_one(".publishTime")
-    if t:
-        pub = t.get_text(strip=True)
+    pub_tag = a.select_one(".publishTime")
+    pub = pub_tag.get_text(strip=True) if pub_tag else ""
 
     # Image
-    img = ""
     img_tag = a.select_one("img")
-    if img_tag:
-        img = img_tag.get("src", "")
+    img = img_tag.get("src", "") if img_tag else ""
 
     articles.append({
         "url": url,
@@ -59,17 +51,24 @@ for a in soup.select("a[href*='/opinion/article/']"):
 
 # Load previous XML or create new
 if os.path.exists(XML_FILE):
-    tree = ET.parse(XML_FILE)
-    root = tree.getroot()
-    channel = root.find("channel")
+    try:
+        tree = ET.parse(XML_FILE)
+        root = tree.getroot()
+    except ET.ParseError:
+        root = ET.Element("rss", version="2.0")
 else:
     root = ET.Element("rss", version="2.0")
+
+# Ensure RSS/Channel structure
+channel = root.find("channel")
+if channel is None:
+    # Either old XML format or new empty file
     channel = ET.SubElement(root, "channel")
     ET.SubElement(channel, "title").text = "Samakal Opinion"
     ET.SubElement(channel, "link").text = "https://samakal.com/opinion"
     ET.SubElement(channel, "description").text = "Latest opinion articles from Samakal"
 
-# Collect existing URLs
+# Collect existing URLs for deduplication
 existing = set()
 for item in channel.findall("item"):
     link_tag = item.find("link")
@@ -89,10 +88,9 @@ for art in articles:
     if art["img"]:
         ET.SubElement(item, "enclosure", url=art["img"], type="image/jpeg")
 
-# Trim to last MAX_ITEMS
+# Trim to last MAX_ITEMS, removing oldest first
 all_items = channel.findall("item")
 if len(all_items) > MAX_ITEMS:
-    # Remove oldest first
     for old_item in all_items[:-MAX_ITEMS]:
         channel.remove(old_item)
 
