@@ -18,52 +18,46 @@ with open(HTML_FILE, "r", encoding="utf-8") as f:
 
 articles = []
 
-# --- 1. DCatLead (main lead) ---
-for lead in soup.select("div.DCatLead a[href*='/opinion/article/']"):
-    url = lead.get("href")
-    h1 = lead.select_one("h1")
-    title = h1.get_text(strip=True) if h1 else None
+# ------------------------------------------------------------
+# Reuters-style blocks
+# ------------------------------------------------------------
+
+BASE = "https://www.reuters.com"
+
+for blk in soup.select('div[data-testid="Title"] a[data-testid="TitleLink"]'):
+    href = blk.get("href", "").strip()
+    if not href:
+        continue
+
+    # URL correction / normalization
+    if href.startswith("http"):
+        url = href
+    elif href.startswith("/"):
+        url = BASE + href
+    else:
+        continue  # malformed, ignore
+
+    span = blk.select_one('span[data-testid="TitleHeading"]')
+    if not span:
+        continue
+
+    title = span.get_text(strip=True)
     if not title:
         continue
-    desc_tag = lead.select_one("p.CatDesc")
-    desc = desc_tag.get_text(strip=True) if desc_tag else ""
-    pub_tag = lead.select_one(".publishTime")
-    pub = pub_tag.get_text(strip=True) if pub_tag else ""
-    img_tag = lead.select_one("img")
-    img = img_tag.get("src", "") if img_tag else ""
-    articles.append({"url": url, "title": title, "desc": desc, "pub": pub, "img": img})
 
-# --- 2. Catcards (category cards) ---
-for card in soup.select("div.Catcards a[href*='/opinion/article/']"):
-    url = card.get("href")
-    h3 = card.select_one("h3")
-    title = h3.get_text(strip=True) if h3 else None
-    if not title:
-        continue
-    desc_tag = card.select_one("p")
-    desc = desc_tag.get_text(strip=True) if desc_tag else ""
-    pub_tag = card.select_one(".publishTime")
-    pub = pub_tag.get_text(strip=True) if pub_tag else ""
-    img_tag = card.select_one("img")
-    img = img_tag.get("src", "") if img_tag else ""
-    articles.append({"url": url, "title": title, "desc": desc, "pub": pub, "img": img})
+    # Reuters blocks do not include description or image
+    articles.append({
+        "url": url,
+        "title": title,
+        "desc": "",
+        "pub": datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000"),
+        "img": ""
+    })
 
-# --- 3. CatListNews (sub news) ---
-for sub in soup.select("div.CatListNews a[href*='/opinion/article/']"):
-    url = sub.get("href")
-    h3 = sub.select_one("h3")
-    title = h3.get_text(strip=True) if h3 else None
-    if not title:
-        continue
-    desc_tag = sub.select_one("p")
-    desc = desc_tag.get_text(strip=True) if desc_tag else ""
-    pub_tag = sub.select_one(".publishTime")
-    pub = pub_tag.get_text(strip=True) if pub_tag else ""
-    img_tag = sub.select_one("img")
-    img = img_tag.get("src", "") if img_tag else ""
-    articles.append({"url": url, "title": title, "desc": desc, "pub": pub, "img": img})
+# ------------------------------------------------------------
+# Load or create XML
+# ------------------------------------------------------------
 
-# --- Load or create XML ---
 if os.path.exists(XML_FILE):
     try:
         tree = ET.parse(XML_FILE)
@@ -77,9 +71,9 @@ else:
 channel = root.find("channel")
 if channel is None:
     channel = ET.SubElement(root, "channel")
-    ET.SubElement(channel, "title").text = "Samakal Opinion"
-    ET.SubElement(channel, "link").text = "https://samakal.com/opinion"
-    ET.SubElement(channel, "description").text = "Latest opinion articles from Samakal"
+    ET.SubElement(channel, "title").text = "Reuters Feed"
+    ET.SubElement(channel, "link").text = "https://www.reuters.com"
+    ET.SubElement(channel, "description").text = "Latest Reuters news"
 
 # Deduplicate existing URLs
 existing = set()
@@ -92,11 +86,13 @@ for item in channel.findall("item"):
 for art in articles:
     if art["url"] in existing:
         continue
+
     item = ET.SubElement(channel, "item")
     ET.SubElement(item, "title").text = art["title"]
     ET.SubElement(item, "link").text = art["url"]
     ET.SubElement(item, "description").text = art["desc"]
-    ET.SubElement(item, "pubDate").text = art["pub"] if art["pub"] else datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+    ET.SubElement(item, "pubDate").text = art["pub"]
+
     if art["img"]:
         ET.SubElement(item, "enclosure", url=art["img"], type="image/jpeg")
 
