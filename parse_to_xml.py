@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 
 HTML_FILE = "opinion.html"
-XML_FILE = "articles.xml"
+XML_FILE = "article.xml"
 MAX_ITEMS = 500
 
 # Load HTML
@@ -29,13 +29,12 @@ for blk in soup.select('div[data-testid="Title"] a[data-testid="TitleLink"]'):
     if not href:
         continue
 
-    # URL correction / normalization
     if href.startswith("http"):
         url = href
     elif href.startswith("/"):
         url = BASE + href
     else:
-        continue  # malformed, ignore
+        continue
 
     span = blk.select_one('span[data-testid="TitleHeading"]')
     if not span:
@@ -45,7 +44,6 @@ for blk in soup.select('div[data-testid="Title"] a[data-testid="TitleLink"]'):
     if not title:
         continue
 
-    # Reuters blocks do not include description or image
     articles.append({
         "url": url,
         "title": title,
@@ -71,9 +69,9 @@ else:
 channel = root.find("channel")
 if channel is None:
     channel = ET.SubElement(root, "channel")
-    ET.SubElement(channel, "title").text = "Reuters Feed"
-    ET.SubElement(channel, "link").text = "https://www.reuters.com"
-    ET.SubElement(channel, "description").text = "Latest Reuters news"
+    ET.SubElement(channel, "title").text = "Custom Feed"
+    ET.SubElement(channel, "link").text = "https://evilgodfahim.github.io/reur/"
+    ET.SubElement(channel, "description").text = "Custom scraped articles"
 
 # Deduplicate existing URLs
 existing = set()
